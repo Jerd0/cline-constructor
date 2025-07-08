@@ -27,6 +27,10 @@ export interface WebviewMessage {
 		| "grpc_request_cancel"
 		| "toggleWorkflow"
 		| "executeQuickWin"
+		| "getVSCodeConfig"
+		| "getConstructorModels"
+		| "showInformationMessage"
+		| "showErrorMessage"
 
 	text?: string
 	disabled?: boolean

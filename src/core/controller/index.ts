@@ -215,6 +215,13 @@ export class Controller {
 				await this.setUserInfo(message.user || undefined)
 				await this.postStateToWebview()
 				break
+			case "showInformationMessage":
+				vscode.window.showInformationMessage(message.text!)
+				break
+
+			case "showErrorMessage":
+				vscode.window.showErrorMessage(message.text!)
+				break
 			case "webviewDidLaunch":
 				this.postStateToWebview()
 				this.workspaceTracker?.populateFilePaths() // don't await
@@ -288,6 +295,90 @@ export class Controller {
 			}
 			case "fetchMcpMarketplace": {
 				await this.fetchMcpMarketplace(message.bool)
+				break
+			}
+			case "getVSCodeConfig": {
+				try {
+					const vsCodeConfig = {
+						constructorOrigin: process.env.ROLOS_API_SERVER,
+						constructorSessionToken: process.env.ROLOS_SDK_TOKEN,
+					}
+
+					this.postMessageToWebview({
+						type: "vsCodeConfig",
+						vsCodeConfig,
+					} as ExtensionMessage)
+				} catch (error) {
+					this.postMessageToWebview({
+						type: "vsCodeConfig",
+						error: "Failed to get environment configuration",
+					} as ExtensionMessage)
+				}
+				break
+			}
+			case "getConstructorModels": {
+				try {
+					const constructorOrigin = process.env.ROLOS_API_SERVER
+					const constructorSessionToken = process.env.ROLOS_SDK_TOKEN
+
+					if (!constructorOrigin || !constructorSessionToken) {
+						const errorMsg = `Missing environment variables: ROLOS_API_SERVER=${!!constructorOrigin}, ROLOS_SDK_TOKEN=${!!constructorSessionToken}`
+						this.postMessageToWebview({
+							type: "constructorModels",
+							error: errorMsg,
+						} as ExtensionMessage)
+						return
+					}
+
+					const url = `${constructorOrigin}/api/platform-kmapi/v1/language_models?mode=openai`
+					const headers = {
+						"X-CTR-Session-Token": `${constructorSessionToken}`,
+						"Content-Type": "application/json",
+					}
+
+					axios
+						.get(url, {
+							headers,
+							timeout: 10000,
+						})
+						.then((response) => {
+							const data = response.data
+							const modelsRecord: Record<string, ModelInfo> = {}
+
+							if (data.data && Array.isArray(data.data)) {
+								data.data.forEach((model: any) => {
+									modelsRecord[model.id] = {
+										supportsPromptCache: true,
+										description: model.metadata?.name || model.id,
+									}
+								})
+							}
+
+							this.postMessageToWebview({
+								type: "constructorModels",
+								constructorModels: modelsRecord,
+							} as ExtensionMessage)
+						})
+						.catch((error) => {
+							// Check if it's a 403 error
+							if (error.response && error.response.status === 403) {
+								this.postMessageToWebview({
+									type: "constructorModels",
+									error: "You don't have access to Research.Cline",
+								} as ExtensionMessage)
+							} else {
+								this.postMessageToWebview({
+									type: "constructorModels",
+									error: `API Error: ${error.message}`,
+								} as ExtensionMessage)
+							}
+						})
+				} catch (error) {
+					this.postMessageToWebview({
+						type: "constructorModels",
+						error: `General error: ${error}`,
+					} as ExtensionMessage)
+				}
 				break
 			}
 			// case "openMcpMarketplaceServerDetails": {
@@ -512,6 +603,7 @@ export class Controller {
 					)
 					break
 				case "openai":
+				case "constructory":
 					await updateGlobalState(this.context, "previousModeModelId", apiConfiguration.openAiModelId)
 					await updateGlobalState(this.context, "previousModeModelInfo", apiConfiguration.openAiModelInfo)
 					break
@@ -567,6 +659,7 @@ export class Controller {
 						await updateGlobalState(this.context, "vsCodeLmModelSelector", newVsCodeLmModelSelector)
 						break
 					case "openai":
+					case "constructory":
 						await updateGlobalState(this.context, "openAiModelId", newModelId)
 						await updateGlobalState(this.context, "openAiModelInfo", newModelInfo)
 						break

@@ -2,7 +2,7 @@
 	"name": "claude-dev",
 	"displayName": "Cline",
 	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
-	"version": "3.17.8",
+	"version": "3.17.8-constructory",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0"
@@ -72,6 +72,11 @@
 			]
 		},
 		"commands": [
+			{
+				"command": "extension.testConstructoryHandler",
+				"title": "Test ConstructoryHandler",
+				"category": "Cline"
+			},
 			{
 				"command": "cline.plusButtonClicked",
 				"title": "New Task",
@@ -261,7 +266,18 @@
 		},
 		"configuration": {
 			"title": "Cline",
-			"properties": {}
+			"properties": {
+				"cline.openAiBaseUrl": {
+					"type": "string",
+					"default": "",
+					"description": "Base URL for OpenAI API requests"
+				},
+				"cline.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "API key for OpenAI API requests"
+				}
+			}
 		}
 	},
 	"scripts": {
@@ -273,6 +289,7 @@
 		"watch:esbuild": "node esbuild.js --watch",
 		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
 		"package": "npm run check-types && npm run build:webview && npm run lint && node esbuild.js --production",
+		"package:vsix": "npm run package && vsce package --out \"cline-$(node -p \"require('./package.json').version\").vsix\"",
 		"protos": "node proto/build-proto.js && node scripts/generate-server-setup.mjs",
 		"postprotos": "prettier src/shared/proto src/core/controller webview-ui/src/services src/standalone/server-setup.ts --write --log-level silent",
 		"compile-tests": "node ./scripts/build-tests.js",
@@ -403,5 +420,6 @@
 		"turndown": "^7.2.0",
 		"web-tree-sitter": "^0.22.6",
 		"zod": "^3.24.2"
-	}
+	},
+	"packageManager": "pnpm@7.29.0+sha512.4b22467142bb8262d22588eca4bea254e47d092ec045803b2b42662648e7f8c331109054c337345dd3c1370879abc771b3e891d994016a5988d65236e0645538"
 }

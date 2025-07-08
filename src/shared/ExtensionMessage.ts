@@ -37,6 +37,8 @@ export interface ExtensionMessage {
 		| "userCreditsPayments"
 		| "fileSearchResults"
 		| "grpc_response" // New type for gRPC responses
+		| "vsCodeConfig" // New type for VSCode configuration
+		| "constructorModels" // New type for Constructor models
 	text?: string
 	action?:
 		| "chatButtonClicked"
@@ -97,6 +99,12 @@ export interface ExtensionMessage {
 		is_streaming?: boolean // Whether this is part of a streaming response
 		sequence_number?: number // For ordering chunks in streaming responses
 	}
+	vsCodeConfig?: {
+		constructorOrigin?: string
+		constructorSessionToken?: string
+		error?: string
+	}
+	constructorModels?: Record<string, ModelInfo>
 }
 
 export type Platform = "aix" | "darwin" | "freebsd" | "linux" | "openbsd" | "sunos" | "win32" | "unknown"

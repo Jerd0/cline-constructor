@@ -8,6 +8,7 @@ import { OpenAiHandler } from "./providers/openai"
 import { OllamaHandler } from "./providers/ollama"
 import { LmStudioHandler } from "./providers/lmstudio"
 import { GeminiHandler } from "./providers/gemini"
+import { ConstructoryHandler } from "./providers/constructory"
 import { OpenAiNativeHandler } from "./providers/openai-native"
 import { ApiStream, ApiStreamUsageChunk } from "./transform/stream"
 import { DeepSeekHandler } from "./providers/deepseek"
@@ -87,6 +88,8 @@ export function buildApiHandler(configuration: ApiConfiguration): ApiHandler {
 			return new SambanovaHandler(options)
 		case "cerebras":
 			return new CerebrasHandler(options)
+		case "constructory":
+			return new ConstructoryHandler(options)
 		default:
 			return new AnthropicHandler(options)
 	}

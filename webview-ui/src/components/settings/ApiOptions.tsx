@@ -161,6 +161,54 @@ const ApiOptions = ({
 	const [providerSortingSelected, setProviderSortingSelected] = useState(!!apiConfiguration?.openRouterProviderSorting)
 	const [reasoningEffortSelected, setReasoningEffortSelected] = useState(!!apiConfiguration?.reasoningEffort)
 
+	const [constructorModels, setConstructorModels] = useState<Record<string, ModelInfo>>({})
+
+	// Function to load Constructor models
+	const loadConstructorModels = useCallback(() => {
+		// Request Constructor models from the extension
+		vscode.postMessage({
+			type: "getConstructorModels",
+		})
+	}, [])
+
+	const { selectedProvider, selectedModelId, selectedModelInfo } = useMemo(() => {
+		return normalizeApiConfiguration(apiConfiguration)
+	}, [apiConfiguration])
+
+	// Load Constructor models when provider is constructory
+	useEffect(() => {
+		if (selectedProvider === "constructory") {
+			loadConstructorModels()
+		}
+	}, [loadConstructorModels, selectedProvider])
+
+	// Add handler for Constructor models messages
+	useEffect(() => {
+		const handleModelsMessage = (event: MessageEvent) => {
+			const message = event.data;
+			if (message.type === "constructorModels") {
+				if (message.constructorModels) {
+					setConstructorModels(message.constructorModels);
+					handleInputChange("apiModelId")(message.constructorModels[Object.keys(message.constructorModels)[0]]?.id)
+
+					vscode.postMessage({
+						type: "showInformationMessage",
+						text: `Loaded ${Object.keys(message.constructorModels).length} models`
+					});
+				} else if (message.error) {
+
+					vscode.postMessage({
+						type: "showErrorMessage",
+						text: `Error loading models: ${message.error}`
+					});
+				}
+			}
+		};
+
+		window.addEventListener("message", handleModelsMessage);
+		return () => window.removeEventListener("message", handleModelsMessage);
+	}, []);
+
 	const handleInputChange = (field: keyof ApiConfiguration) => (event: any) => {
 		const newValue = event.target.value
 
@@ -183,10 +231,6 @@ const ApiOptions = ({
 			})
 		}
 	}
-
-	const { selectedProvider, selectedModelId, selectedModelInfo } = useMemo(() => {
-		return normalizeApiConfiguration(apiConfiguration)
-	}, [apiConfiguration])
 
 	// Poll ollama/lmstudio models
 	const requestLocalModels = useCallback(async () => {
@@ -316,6 +360,7 @@ const ApiOptions = ({
 						minWidth: 130,
 						position: "relative",
 					}}>
+					<VSCodeOption value="constructory">Constructory</VSCodeOption>
 					<VSCodeOption value="cline">Cline</VSCodeOption>
 					<VSCodeOption value="openrouter">OpenRouter</VSCodeOption>
 					<VSCodeOption value="anthropic">Anthropic</VSCodeOption>
@@ -1378,6 +1423,19 @@ const ApiOptions = ({
 				</div>
 			)}
 
+			{selectedProvider === "constructory" && (
+				<div>
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: 3,
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						Constructory uses environment variables for configuration. No additional setup required.
+					</p>
+				</div>
+			)}
+
 			{selectedProvider === "requesty" && (
 				<div>
 					<VSCodeTextField
@@ -2142,9 +2200,40 @@ const ApiOptions = ({
 				</>
 			)}
 
+			{selectedProvider === "constructory" && (
+				<>
+					<DropdownContainer zIndex={DROPDOWN_Z_INDEX - 2} className="dropdown-container">
+						<label htmlFor="model-id">
+							<span style={{ fontWeight: 500 }}>Model</span>
+						</label>
+						<VSCodeDropdown
+							id="model-id"
+							value={selectedModelId}
+							onChange={handleInputChange("apiModelId")}
+							style={{ width: "100%" }}>
+							<VSCodeOption value="">Select a model...</VSCodeOption>
+							{Object.keys(constructorModels).map((modelId) => (
+								<VSCodeOption
+									key={modelId}
+									value={modelId}
+									style={{
+										whiteSpace: "normal",
+										wordWrap: "break-word",
+										maxWidth: "100%",
+									}}>
+									{constructorModels[modelId].description || modelId}
+								</VSCodeOption>
+							))}
+						</VSCodeDropdown>
+					</DropdownContainer>
+				</>
+			)}
+
+
 			{selectedProvider !== "openrouter" &&
 				selectedProvider !== "cline" &&
 				selectedProvider !== "openai" &&
+				selectedProvider !== "constructory" &&
 				selectedProvider !== "ollama" &&
 				selectedProvider !== "lmstudio" &&
 				selectedProvider !== "vscode-lm" &&

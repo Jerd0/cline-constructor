@@ -1,6 +1,7 @@
 import type { LanguageModelChatSelector } from "../api/providers/types"
 
 export type ApiProvider =
+	| "constructory"
 	| "anthropic"
 	| "openrouter"
 	| "bedrock"

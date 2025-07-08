@@ -158,6 +158,16 @@ To contribute to the project, start with our [Contributing Guide](CONTRIBUTING.m
     ```
 4. Launch by pressing `F5` (or `Run`->`Start Debugging`) to open a new VSCode window with the extension loaded. (You may need to install the [esbuild problem matchers extension](https://marketplace.visualstudio.com/items?itemName=connor4312.esbuild-problem-matchers) if you run into issues building the project.)
 
+5. To create a .vsix file for local installation:
+    ```bash
+    npm run package:vsix
+    ```
+   This will generate a file named `cline-[version].vsix` in the root directory, which you can install in VS Code by:
+   - Going to the Extensions view
+   - Clicking on the "..." menu (More Actions)
+   - Selecting "Install from VSIX..."
+   - Choosing the generated .vsix file
+
 </details>
 
 <details>
