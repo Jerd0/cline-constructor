@@ -318,6 +318,17 @@ export class Controller {
 			}
 			case "getConstructorModels": {
 				try {
+					// Check if models are already cached in global state
+					const cachedModels = await getGlobalState(this.context, "constructorModels")
+					if (cachedModels && Object.keys(cachedModels).length > 0) {
+						// Send cached models
+						this.postMessageToWebview({
+							type: "constructorModels",
+							constructorModels: cachedModels,
+						} as ExtensionMessage)
+						return
+					}
+
 					const constructorOrigin = process.env.ROLOS_API_SERVER
 					const constructorSessionToken = process.env.ROLOS_SDK_TOKEN
 
@@ -341,7 +352,7 @@ export class Controller {
 							headers,
 							timeout: 10000,
 						})
-						.then((response) => {
+						.then(async (response) => {
 							const data = response.data
 							const modelsRecord: Record<string, ModelInfo> = {}
 
@@ -353,6 +364,9 @@ export class Controller {
 									}
 								})
 							}
+
+							// Cache the models in global state
+							await updateGlobalState(this.context, "constructorModels", modelsRecord)
 
 							this.postMessageToWebview({
 								type: "constructorModels",
@@ -1247,6 +1261,15 @@ export class Controller {
 	async postStateToWebview() {
 		const state = await this.getStateToPostToWebview()
 		await sendStateUpdate(state)
+
+		// Load constructory models if provider is constructory and models aren't cached
+		if (state.apiConfiguration?.apiProvider === "constructory") {
+			const cachedModels = await getGlobalState(this.context, "constructorModels")
+			if (!cachedModels || Object.keys(cachedModels).length === 0) {
+				// Load models in background
+				this.handleWebviewMessage({ type: "getConstructorModels" } as WebviewMessage)
+			}
+		}
 	}
 
 	async getStateToPostToWebview(): Promise<ExtensionState> {

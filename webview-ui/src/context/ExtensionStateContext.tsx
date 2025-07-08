@@ -27,6 +27,8 @@ interface ExtensionStateContextType extends ExtensionState {
 	openRouterModels: Record<string, ModelInfo>
 	openAiModels: string[]
 	requestyModels: Record<string, ModelInfo>
+	constructorModels: Record<string, ModelInfo>
+	isLoadingConstructorModels: boolean
 	mcpServers: McpServer[]
 	mcpMarketplaceCatalog: McpMarketplaceCatalog
 	filePaths: string[]
@@ -60,6 +62,7 @@ interface ExtensionStateContextType extends ExtensionState {
 	setGlobalWorkflowToggles: (toggles: Record<string, boolean>) => void
 	setMcpMarketplaceCatalog: (value: McpMarketplaceCatalog) => void
 	setTotalTasksSize: (value: number | null) => void
+	setIsLoadingConstructorModels: (value: boolean) => void
 
 	// Refresh functions
 	refreshOpenRouterModels: () => void
@@ -185,6 +188,8 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [requestyModels, setRequestyModels] = useState<Record<string, ModelInfo>>({
 		[requestyDefaultModelId]: requestyDefaultModelInfo,
 	})
+	const [constructorModels, setConstructorModels] = useState<Record<string, ModelInfo>>({})
+	const [isLoadingConstructorModels, setIsLoadingConstructorModels] = useState(false)
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
 	const [mcpMarketplaceCatalog, setMcpMarketplaceCatalog] = useState<McpMarketplaceCatalog>({ items: [] })
 	const handleMessage = useCallback((event: MessageEvent) => {
@@ -254,6 +259,12 @@ export const ExtensionStateContextProvider: React.FC<{
 					[requestyDefaultModelId]: requestyDefaultModelInfo,
 					...updatedModels,
 				})
+				break
+			}
+			case "constructorModels": {
+				const updatedModels = message.constructorModels ?? {}
+				setConstructorModels(updatedModels)
+				setIsLoadingConstructorModels(false)
 				break
 			}
 			case "mcpServers": {
@@ -377,6 +388,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		openRouterModels,
 		openAiModels,
 		requestyModels,
+		constructorModels,
+		isLoadingConstructorModels,
 		mcpServers,
 		mcpMarketplaceCatalog,
 		filePaths,
@@ -500,6 +513,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			})),
 		setMcpTab,
 		setTotalTasksSize,
+		setIsLoadingConstructorModels,
 		refreshOpenRouterModels,
 	}
 

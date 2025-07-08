@@ -18,6 +18,9 @@ vi.mock("../../../context/ExtensionStateContext", async (importOriginal) => {
 			setApiConfiguration: vi.fn(),
 			uriScheme: "vscode",
 			requestyModels: {},
+			constructorModels: {},
+			isLoadingConstructorModels: false,
+			setIsLoadingConstructorModels: vi.fn(),
 		})),
 	}
 })
@@ -28,6 +31,9 @@ const mockExtensionState = (apiConfiguration: Partial<ApiConfiguration>) => {
 		setApiConfiguration: vi.fn(),
 		uriScheme: "vscode",
 		requestyModels: {},
+		constructorModels: {},
+		isLoadingConstructorModels: false,
+		setIsLoadingConstructorModels: vi.fn(),
 	} as any)
 }
 
@@ -234,5 +240,59 @@ describe("ApiOptions Component", () => {
 		const modelIdSelect = screen.getByLabelText("Model")
 		expect(modelIdSelect).toBeInTheDocument()
 		expect(modelIdSelect).toHaveValue("Qwen/Qwen2.5-32B-Instruct-fast")
+	})
+})
+
+describe("ApiOptions Component - Constructory Provider", () => {
+	vi.clearAllMocks()
+	const mockPostMessage = vi.fn()
+
+	beforeEach(() => {
+		//@ts-expect-error - vscode is not defined in the global namespace in test environment
+		global.vscode = { postMessage: mockPostMessage }
+		mockExtensionState({
+			apiProvider: "constructory",
+			openAiModelId: "existing-model-id",
+		})
+	})
+
+	it("renders constructory model dropdown", () => {
+		render(
+			<ExtensionStateContextProvider>
+				<ApiOptions showModelOptions={true} />
+			</ExtensionStateContextProvider>,
+		)
+		const modelSelect = screen.getByLabelText("Model")
+		expect(modelSelect).toBeInTheDocument()
+	})
+
+	it("preserves selected model when constructor models are loaded", () => {
+		const { container } = render(
+			<ExtensionStateContextProvider>
+				<ApiOptions showModelOptions={true} />
+			</ExtensionStateContextProvider>,
+		)
+
+		const modelSelect = screen.getByLabelText("Model")
+		expect(modelSelect).toHaveValue("existing-model-id")
+
+		// Simulate receiving constructor models message
+		const mockModels = {
+			"model-1": { id: "model-1", description: "Model 1" },
+			"model-2": { id: "model-2", description: "Model 2" },
+		}
+
+		// Dispatch the message event
+		window.dispatchEvent(
+			new MessageEvent("message", {
+				data: {
+					type: "constructorModels",
+					constructorModels: mockModels,
+				},
+			}),
+		)
+
+		// The selected model should remain unchanged
+		expect(modelSelect).toHaveValue("existing-model-id")
 	})
 })

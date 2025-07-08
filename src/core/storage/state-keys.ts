@@ -92,5 +92,6 @@ export type GlobalStateKey =
 	| "requestTimeoutMs"
 	| "shellIntegrationTimeout"
 	| "isNewUser"
+	| "constructorModels"
 
 export type LocalStateKey = "localClineRulesToggles"

@@ -69,7 +69,7 @@ export function validateApiConfiguration(apiConfiguration?: ApiConfiguration): s
 				}
 				break
 			case "constructory":
-				if (!apiConfiguration.apiModelId) {
+				if (!apiConfiguration.openAiModelId) {
 					return "You must provide a valid model ID."
 				}
 				break

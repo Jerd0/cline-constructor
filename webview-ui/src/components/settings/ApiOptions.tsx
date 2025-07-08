@@ -161,18 +161,32 @@ const ApiOptions = ({
 	const [providerSortingSelected, setProviderSortingSelected] = useState(!!apiConfiguration?.openRouterProviderSorting)
 	const [reasoningEffortSelected, setReasoningEffortSelected] = useState(!!apiConfiguration?.reasoningEffort)
 
-	const [constructorModels, setConstructorModels] = useState<Record<string, ModelInfo>>({})
+	// Get constructor models from global state
+	const { 
+		constructorModels, 
+		isLoadingConstructorModels, 
+		setIsLoadingConstructorModels 
+	} = useExtensionState()
 
 	// Function to load Constructor models
 	const loadConstructorModels = useCallback(() => {
+		// Check if models are already loaded
+		if (Object.keys(constructorModels).length > 0) {
+			return // Models already loaded, don't load again
+		}
+
+		setIsLoadingConstructorModels(true)
 		// Request Constructor models from the extension
 		vscode.postMessage({
 			type: "getConstructorModels",
 		})
-	}, [])
+	}, [constructorModels, setIsLoadingConstructorModels])
 
 	const { selectedProvider, selectedModelId, selectedModelInfo } = useMemo(() => {
-		return normalizeApiConfiguration(apiConfiguration)
+		const normalized = normalizeApiConfiguration(apiConfiguration)
+
+		// For constructory provider, only restore previously selected model, don't auto-select
+		return normalized
 	}, [apiConfiguration])
 
 	// Load Constructor models when provider is constructory
@@ -185,29 +199,28 @@ const ApiOptions = ({
 	// Add handler for Constructor models messages
 	useEffect(() => {
 		const handleModelsMessage = (event: MessageEvent) => {
-			const message = event.data;
+			const message = event.data
 			if (message.type === "constructorModels") {
 				if (message.constructorModels) {
-					setConstructorModels(message.constructorModels);
-					handleInputChange("apiModelId")(message.constructorModels[Object.keys(message.constructorModels)[0]]?.id)
-
+					// Models will be handled by ExtensionStateContext
+					// No automatic model selection
 					vscode.postMessage({
 						type: "showInformationMessage",
-						text: `Loaded ${Object.keys(message.constructorModels).length} models`
-					});
+						text: `Loaded ${Object.keys(message.constructorModels).length} models`,
+					})
 				} else if (message.error) {
-
+					setIsLoadingConstructorModels(false)
 					vscode.postMessage({
 						type: "showErrorMessage",
-						text: `Error loading models: ${message.error}`
-					});
+						text: `Error loading models: ${message.error}`,
+					})
 				}
 			}
-		};
+		}
 
-		window.addEventListener("message", handleModelsMessage);
-		return () => window.removeEventListener("message", handleModelsMessage);
-	}, []);
+		window.addEventListener("message", handleModelsMessage)
+		return () => window.removeEventListener("message", handleModelsMessage)
+	}, [setIsLoadingConstructorModels])
 
 	const handleInputChange = (field: keyof ApiConfiguration) => (event: any) => {
 		const newValue = event.target.value
@@ -227,6 +240,18 @@ const ApiOptions = ({
 				apiConfiguration: {
 					...currentFullApiConfig, // Send the most complete config available
 					apiProvider: newValue, // Override with the new provider
+				},
+			})
+		}
+
+		// For constructory provider, also save model selection immediately to ensure it's persisted
+		if (saveImmediately && field === "openAiModelId" && selectedProvider === "constructory") {
+			const currentFullApiConfig = extensionState.apiConfiguration
+			vscode.postMessage({
+				type: "apiConfiguration",
+				apiConfiguration: {
+					...currentFullApiConfig,
+					openAiModelId: newValue,
 				},
 			})
 		}
@@ -2206,29 +2231,38 @@ const ApiOptions = ({
 						<label htmlFor="model-id">
 							<span style={{ fontWeight: 500 }}>Model</span>
 						</label>
-						<VSCodeDropdown
-							id="model-id"
-							value={selectedModelId}
-							onChange={handleInputChange("apiModelId")}
-							style={{ width: "100%" }}>
-							<VSCodeOption value="">Select a model...</VSCodeOption>
-							{Object.keys(constructorModels).map((modelId) => (
-								<VSCodeOption
-									key={modelId}
-									value={modelId}
-									style={{
-										whiteSpace: "normal",
-										wordWrap: "break-word",
-										maxWidth: "100%",
-									}}>
-									{constructorModels[modelId].description || modelId}
-								</VSCodeOption>
-							))}
-						</VSCodeDropdown>
+						{isLoadingConstructorModels ? (
+							<div style={{ 
+								padding: "8px 12px", 
+								color: "var(--vscode-descriptionForeground)",
+								fontSize: "13px"
+							}}>
+								Loading models...
+							</div>
+						) : (
+							<VSCodeDropdown
+								id="model-id"
+								value={selectedModelId}
+								onChange={handleInputChange("openAiModelId")}
+								style={{ width: "100%" }}>
+								<VSCodeOption value="">Select a model...</VSCodeOption>
+								{Object.keys(constructorModels).map((modelId) => (
+									<VSCodeOption
+										key={modelId}
+										value={modelId}
+										style={{
+											whiteSpace: "normal",
+											wordWrap: "break-word",
+											maxWidth: "100%",
+										}}>
+										{constructorModels[modelId].description || modelId}
+									</VSCodeOption>
+								))}
+							</VSCodeDropdown>
+						)}
 					</DropdownContainer>
 				</>
 			)}
-
 
 			{selectedProvider !== "openrouter" &&
 				selectedProvider !== "cline" &&
@@ -2657,6 +2691,12 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration): 
 				selectedModelInfo: apiConfiguration?.openRouterModelInfo || openRouterDefaultModelInfo,
 			}
 		case "openai":
+			return {
+				selectedProvider: provider,
+				selectedModelId: apiConfiguration?.openAiModelId || "",
+				selectedModelInfo: apiConfiguration?.openAiModelInfo || openAiModelInfoSaneDefaults,
+			}
+		case "constructory":
 			return {
 				selectedProvider: provider,
 				selectedModelId: apiConfiguration?.openAiModelId || "",
