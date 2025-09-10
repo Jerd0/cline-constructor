@@ -60,6 +60,7 @@ export interface ApiHandlerOptions {
 	openAiApiKey?: string
 	openAiModelId?: string
 	openAiModelInfo?: OpenAiCompatibleModelInfo
+	constructorModelId?: string
 	ollamaModelId?: string
 	ollamaBaseUrl?: string
 	ollamaApiOptionsCtxNum?: string

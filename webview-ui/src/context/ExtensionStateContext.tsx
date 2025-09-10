@@ -29,10 +29,12 @@ interface ExtensionStateContextType extends ExtensionState {
 	requestyModels: Record<string, ModelInfo>
 	constructorModels: Record<string, ModelInfo>
 	isLoadingConstructorModels: boolean
+	constructorModelsError: string | null
 	mcpServers: McpServer[]
 	mcpMarketplaceCatalog: McpMarketplaceCatalog
 	filePaths: string[]
 	totalTasksSize: number | null
+	isLoadingLicensedFeatures: boolean
 
 	// View state
 	showMcp: boolean
@@ -63,9 +65,11 @@ interface ExtensionStateContextType extends ExtensionState {
 	setMcpMarketplaceCatalog: (value: McpMarketplaceCatalog) => void
 	setTotalTasksSize: (value: number | null) => void
 	setIsLoadingConstructorModels: (value: boolean) => void
+	setConstructorModelsError: (value: string | null) => void
 
 	// Refresh functions
 	refreshOpenRouterModels: () => void
+	loadLicensedFeatures: () => void
 
 	// Navigation state setters
 	setShowMcp: (value: boolean) => void
@@ -190,8 +194,11 @@ export const ExtensionStateContextProvider: React.FC<{
 	})
 	const [constructorModels, setConstructorModels] = useState<Record<string, ModelInfo>>({})
 	const [isLoadingConstructorModels, setIsLoadingConstructorModels] = useState(false)
+	const [constructorModelsError, setConstructorModelsError] = useState<string | null>(null)
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
 	const [mcpMarketplaceCatalog, setMcpMarketplaceCatalog] = useState<McpMarketplaceCatalog>({ items: [] })
+	const [isLoadingLicensedFeatures, setIsLoadingLicensedFeatures] = useState(true) // Start with true
+	const [hasLoadedLicensedFeatures, setHasLoadedLicensedFeatures] = useState(false) // Track if already loaded
 	const handleMessage = useCallback((event: MessageEvent) => {
 		const message: ExtensionMessage = event.data
 		switch (message.type) {
@@ -262,9 +269,17 @@ export const ExtensionStateContextProvider: React.FC<{
 				break
 			}
 			case "constructorModels": {
-				const updatedModels = message.constructorModels ?? {}
-				setConstructorModels(updatedModels)
-				setIsLoadingConstructorModels(false)
+				if (message.error) {
+					// Handle error case
+					setConstructorModelsError(message.error)
+					setIsLoadingConstructorModels(false)
+				} else {
+					// Handle success case
+					const updatedModels = message.constructorModels ?? {}
+					setConstructorModels(updatedModels)
+					setConstructorModelsError(null) // Clear any previous error
+					setIsLoadingConstructorModels(false)
+				}
 				break
 			}
 			case "mcpServers": {
@@ -275,6 +290,27 @@ export const ExtensionStateContextProvider: React.FC<{
 				if (message.mcpMarketplaceCatalog) {
 					setMcpMarketplaceCatalog(message.mcpMarketplaceCatalog)
 				}
+				break
+			}
+			case "updateLicensedFeatures": {
+				// Set loading state to false when licensed features are updated
+				setIsLoadingLicensedFeatures(false)
+				// Mark as loaded to prevent future loads
+				setHasLoadedLicensedFeatures(true)
+				
+				// Store licensed features in extension state
+				const licensedFeatures = message.licensedFeatures || []
+				
+				setState((prevState) => ({
+					...prevState,
+					licensedFeatures: licensedFeatures,
+				}))
+				
+				// Show information message about loaded licenses count in webview
+				vscode.postMessage({
+					type: "showInformationMessage",
+					text: `Loaded ${licensedFeatures.length} licenses`,
+				})
 				break
 			}
 		}
@@ -305,34 +341,38 @@ export const ExtensionStateContextProvider: React.FC<{
 								autoApprovalSettings: shouldUpdateAutoApproval
 									? stateData.autoApprovalSettings
 									: prevState.autoApprovalSettings,
+								// Preserve licensedFeatures once loaded - never overwrite them
+								licensedFeatures: prevState.licensedFeatures || stateData.licensedFeatures,
 							}
 
 							// Update welcome screen state based on API configuration
 							const config = stateData.apiConfiguration
 							const hasKey = config
-								? [
-										config.apiKey,
-										config.openRouterApiKey,
-										config.awsRegion,
-										config.vertexProjectId,
-										config.openAiApiKey,
-										config.ollamaModelId,
-										config.lmStudioModelId,
-										config.liteLlmApiKey,
-										config.geminiApiKey,
-										config.openAiNativeApiKey,
-										config.deepSeekApiKey,
-										config.requestyApiKey,
-										config.togetherApiKey,
-										config.qwenApiKey,
-										config.doubaoApiKey,
-										config.mistralApiKey,
-										config.vsCodeLmModelSelector,
-										config.clineApiKey,
-										config.asksageApiKey,
-										config.xaiApiKey,
-										config.sambanovaApiKey,
-									].some((key) => key !== undefined)
+								? config.apiProvider === "constructory"
+									? !!(config.constructorModelId && config.constructorModelId.trim() !== "") // Constructory is configured only if model is selected
+									: [
+											config.apiKey,
+											config.openRouterApiKey,
+											config.awsRegion,
+											config.vertexProjectId,
+											config.openAiApiKey,
+											config.ollamaModelId,
+											config.lmStudioModelId,
+											config.liteLlmApiKey,
+											config.geminiApiKey,
+											config.openAiNativeApiKey,
+											config.deepSeekApiKey,
+											config.requestyApiKey,
+											config.togetherApiKey,
+											config.qwenApiKey,
+											config.doubaoApiKey,
+											config.mistralApiKey,
+											config.vsCodeLmModelSelector,
+											config.clineApiKey,
+											config.asksageApiKey,
+											config.xaiApiKey,
+											config.sambanovaApiKey,
+										].some((key) => key !== undefined)
 								: false
 
 							setShowWelcome(!hasKey)
@@ -380,6 +420,18 @@ export const ExtensionStateContextProvider: React.FC<{
 			.catch((error: Error) => console.error("Failed to refresh OpenRouter models:", error))
 	}, [])
 
+	const loadLicensedFeatures = useCallback(async () => {
+		// Only load if features haven't been loaded yet
+		if (hasLoadedLicensedFeatures) {
+			return // Features already loaded, don't load again
+		}
+		
+		// Set loading state to true when starting the request
+		setIsLoadingLicensedFeatures(true)
+		// Request licensed features from backend instead of direct API call
+		vscode.postMessage({ type: "getLicensedFeatures" })
+	}, [hasLoadedLicensedFeatures])
+
 	const contextValue: ExtensionStateContextType = {
 		...state,
 		didHydrateState,
@@ -390,10 +442,12 @@ export const ExtensionStateContextProvider: React.FC<{
 		requestyModels,
 		constructorModels,
 		isLoadingConstructorModels,
+		constructorModelsError,
 		mcpServers,
 		mcpMarketplaceCatalog,
 		filePaths,
 		totalTasksSize,
+		isLoadingLicensedFeatures,
 		showMcp,
 		mcpTab,
 		showSettings,
@@ -514,7 +568,9 @@ export const ExtensionStateContextProvider: React.FC<{
 		setMcpTab,
 		setTotalTasksSize,
 		setIsLoadingConstructorModels,
+		setConstructorModelsError,
 		refreshOpenRouterModels,
+		loadLicensedFeatures,
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>

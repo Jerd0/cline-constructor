@@ -69,8 +69,8 @@ export function validateApiConfiguration(apiConfiguration?: ApiConfiguration): s
 				}
 				break
 			case "constructory":
-				if (!apiConfiguration.openAiModelId) {
-					return "You must provide a valid model ID."
+				if (!apiConfiguration.constructorModelId || apiConfiguration.constructorModelId.trim() === "") {
+					return "You must select a model from the dropdown to continue."
 				}
 				break
 			case "requesty":

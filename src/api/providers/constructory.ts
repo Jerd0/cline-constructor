@@ -28,7 +28,7 @@ export class ConstructoryHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
-		const modelId = this.options.openAiModelId ?? ""
+		const modelId = this.options.constructorModelId ?? ""
 		const isDeepseekReasoner = modelId.includes("deepseek-reasoner")
 		const isR1FormatRequired = this.options.openAiModelInfo?.isR1FormatRequired ?? false
 		const isReasoningModelFamily = modelId.includes("o1") || modelId.includes("o3") || modelId.includes("o4")
@@ -98,7 +98,7 @@ export class ConstructoryHandler implements ApiHandler {
 
 	getModel(): { id: string; info: ModelInfo } {
 		return {
-			id: this.options.openAiModelId ?? "",
+			id: this.options.constructorModelId ?? "",
 			info: this.options.openAiModelInfo ?? openAiModelInfoSaneDefaults,
 		}
 	}

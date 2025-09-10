@@ -100,6 +100,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		openAiModelId,
 		openAiModelInfo,
 		openAiHeaders,
+		constructorModelId,
 		ollamaModelId,
 		ollamaBaseUrl,
 		ollamaApiOptionsCtxNum,
@@ -165,6 +166,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		enableCheckpointsSettingRaw,
 		mcpMarketplaceEnabledRaw,
 		globalWorkflowToggles,
+		constructorModels403Error,
 	] = await Promise.all([
 		getGlobalState(context, "isNewUser") as Promise<boolean | undefined>,
 		getGlobalState(context, "apiProvider") as Promise<ApiProvider | undefined>,
@@ -190,6 +192,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		getGlobalState(context, "openAiModelId") as Promise<string | undefined>,
 		getGlobalState(context, "openAiModelInfo") as Promise<ModelInfo | undefined>,
 		getGlobalState(context, "openAiHeaders") as Promise<Record<string, string> | undefined>,
+		getGlobalState(context, "constructorModelId") as Promise<string | undefined>,
 		getGlobalState(context, "ollamaModelId") as Promise<string | undefined>,
 		getGlobalState(context, "ollamaBaseUrl") as Promise<string | undefined>,
 		getGlobalState(context, "ollamaApiOptionsCtxNum") as Promise<string | undefined>,
@@ -255,6 +258,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		getGlobalState(context, "enableCheckpointsSetting") as Promise<boolean | undefined>,
 		getGlobalState(context, "mcpMarketplaceEnabled") as Promise<boolean | undefined>,
 		getGlobalState(context, "globalWorkflowToggles") as Promise<ClineRulesToggles | undefined>,
+		getGlobalState(context, "constructorModels403Error") as Promise<boolean | undefined>,
 		fetch,
 	])
 
@@ -262,9 +266,13 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 	if (storedApiProvider) {
 		apiProvider = storedApiProvider
 	} else {
-		// Either new user or legacy user that doesn't have the apiProvider stored in state
-		// (If they're using OpenRouter or Bedrock, then apiProvider state will exist)
-		if (apiKey) {
+		// Check for constructory environment variables first (with test defaults)
+		const hasConstructorEnvVars = process.env.ROLOS_SDK_TOKEN && process.env.ROLOS_API_SERVER
+
+		// Don't select constructory if we've previously had a 403 error
+		if (hasConstructorEnvVars && !constructorModels403Error) {
+			apiProvider = "constructory"
+		} else if (apiKey) {
 			apiProvider = "anthropic"
 		} else {
 			// New users should default to openrouter, since they've opted to use an API key instead of signing in
@@ -320,6 +328,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 			openAiModelId,
 			openAiModelInfo,
 			openAiHeaders: openAiHeaders || {},
+			constructorModelId,
 			ollamaModelId,
 			ollamaBaseUrl,
 			ollamaApiOptionsCtxNum,
@@ -418,6 +427,7 @@ export async function updateApiConfiguration(context: vscode.ExtensionContext, a
 		openAiModelId,
 		openAiModelInfo,
 		openAiHeaders,
+		constructorModelId,
 		ollamaModelId,
 		ollamaBaseUrl,
 		ollamaApiOptionsCtxNum,
@@ -480,6 +490,7 @@ export async function updateApiConfiguration(context: vscode.ExtensionContext, a
 	await updateGlobalState(context, "openAiModelId", openAiModelId)
 	await updateGlobalState(context, "openAiModelInfo", openAiModelInfo)
 	await updateGlobalState(context, "openAiHeaders", openAiHeaders || {})
+	await updateGlobalState(context, "constructorModelId", constructorModelId)
 	await updateGlobalState(context, "ollamaModelId", ollamaModelId)
 	await updateGlobalState(context, "ollamaBaseUrl", ollamaBaseUrl)
 	await updateGlobalState(context, "ollamaApiOptionsCtxNum", ollamaApiOptionsCtxNum)

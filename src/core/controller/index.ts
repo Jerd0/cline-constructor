@@ -283,6 +283,13 @@ export class Controller {
 			case "apiConfiguration":
 				if (message.apiConfiguration) {
 					await updateApiConfiguration(this.context, message.apiConfiguration)
+
+					// Clear constructor 403 error flag when API configuration changes
+					// This allows users to retry after updating credentials or getting proper licensing
+					if (message.apiConfiguration.apiProvider === "constructory") {
+						await updateGlobalState(this.context, "constructorModels403Error", null)
+					}
+
 					if (this.task) {
 						this.task.api = buildApiHandler(message.apiConfiguration)
 					}
@@ -318,6 +325,29 @@ export class Controller {
 			}
 			case "getConstructorModels": {
 				try {
+					// License check is now handled in the frontend via context
+					// The frontend will only show constructory if licensed
+					// But we can add a server-side check as backup
+					const baseURL = process.env.ROLOS_API_SERVER
+					const sessionToken = process.env.ROLOS_SDK_TOKEN
+					if (!baseURL || !sessionToken) {
+						this.postMessageToWebview({
+							type: "constructorModels",
+							error: "Constructory configuration is missing.",
+						} as ExtensionMessage)
+						return
+					}
+
+					// Check if we've previously failed with 403 error
+					const constructor403Error = await getGlobalState(this.context, "constructorModels403Error")
+					if (constructor403Error) {
+						this.postMessageToWebview({
+							type: "constructorModels",
+							error: "Project owner don't have licence Research.Cline",
+						} as ExtensionMessage)
+						return
+					}
+
 					// Check if models are already cached in global state
 					const cachedModels = await getGlobalState(this.context, "constructorModels")
 					if (cachedModels && Object.keys(cachedModels).length > 0) {
@@ -368,17 +398,23 @@ export class Controller {
 							// Cache the models in global state
 							await updateGlobalState(this.context, "constructorModels", modelsRecord)
 
+							// Clear any previous 403 error flag on successful load
+							await updateGlobalState(this.context, "constructorModels403Error", null)
+
 							this.postMessageToWebview({
 								type: "constructorModels",
 								constructorModels: modelsRecord,
 							} as ExtensionMessage)
 						})
-						.catch((error) => {
+						.catch(async (error) => {
 							// Check if it's a 403 error
 							if (error.response && error.response.status === 403) {
+								// Set flag to prevent future requests
+								await updateGlobalState(this.context, "constructorModels403Error", true)
+
 								this.postMessageToWebview({
 									type: "constructorModels",
-									error: "You don't have access to Research.Cline",
+									error: "Project owner don't have licence Research.Cline",
 								} as ExtensionMessage)
 							} else {
 								this.postMessageToWebview({
@@ -391,6 +427,44 @@ export class Controller {
 					this.postMessageToWebview({
 						type: "constructorModels",
 						error: `General error: ${error}`,
+					} as ExtensionMessage)
+				}
+				break
+			}
+			case "getLicensedFeatures": {
+				try {
+					const baseURL = process.env.ROLOS_API_SERVER
+					const sessionToken = process.env.ROLOS_SDK_TOKEN
+
+					if (!baseURL || !sessionToken) {
+						this.postMessageToWebview({
+							type: "updateLicensedFeatures",
+							licensedFeatures: [],
+						} as ExtensionMessage)
+						return
+					}
+
+					const url = `${baseURL}/api/platform-kmapi/v1/users/licensed-features`
+					const headers = {
+						"X-CTR-Session-Token": sessionToken,
+						"Content-Type": "application/json",
+					}
+
+					const response = await axios.get(url, {
+						headers,
+						timeout: 10000,
+					})
+
+					const licensedFeatures = response.data.results || []
+
+					this.postMessageToWebview({
+						type: "updateLicensedFeatures",
+						licensedFeatures: licensedFeatures,
+					} as ExtensionMessage)
+				} catch (error: any) {
+					this.postMessageToWebview({
+						type: "updateLicensedFeatures",
+						licensedFeatures: [],
 					} as ExtensionMessage)
 				}
 				break
@@ -464,6 +538,13 @@ export class Controller {
 				// api config
 				if (message.apiConfiguration) {
 					await updateApiConfiguration(this.context, message.apiConfiguration)
+
+					// Clear constructor 403 error flag when API configuration changes
+					// This allows users to retry after updating credentials or getting proper licensing
+					if (message.apiConfiguration.apiProvider === "constructory") {
+						await updateGlobalState(this.context, "constructorModels403Error", null)
+					}
+
 					if (this.task) {
 						this.task.api = buildApiHandler(message.apiConfiguration)
 					}
@@ -617,8 +698,11 @@ export class Controller {
 					)
 					break
 				case "openai":
-				case "constructory":
 					await updateGlobalState(this.context, "previousModeModelId", apiConfiguration.openAiModelId)
+					await updateGlobalState(this.context, "previousModeModelInfo", apiConfiguration.openAiModelInfo)
+					break
+				case "constructory":
+					await updateGlobalState(this.context, "previousModeModelId", apiConfiguration.constructorModelId)
 					await updateGlobalState(this.context, "previousModeModelInfo", apiConfiguration.openAiModelInfo)
 					break
 				case "ollama":
@@ -673,8 +757,11 @@ export class Controller {
 						await updateGlobalState(this.context, "vsCodeLmModelSelector", newVsCodeLmModelSelector)
 						break
 					case "openai":
-					case "constructory":
 						await updateGlobalState(this.context, "openAiModelId", newModelId)
+						await updateGlobalState(this.context, "openAiModelInfo", newModelInfo)
+						break
+					case "constructory":
+						await updateGlobalState(this.context, "constructorModelId", newModelId)
 						await updateGlobalState(this.context, "openAiModelInfo", newModelInfo)
 						break
 					case "ollama":
@@ -1265,7 +1352,10 @@ export class Controller {
 		// Load constructory models if provider is constructory and models aren't cached
 		if (state.apiConfiguration?.apiProvider === "constructory") {
 			const cachedModels = await getGlobalState(this.context, "constructorModels")
-			if (!cachedModels || Object.keys(cachedModels).length === 0) {
+			const constructor403Error = await getGlobalState(this.context, "constructorModels403Error")
+
+			// Only load models if they're not cached AND we haven't had a 403 error
+			if ((!cachedModels || Object.keys(cachedModels).length === 0) && !constructor403Error) {
 				// Load models in background
 				this.handleWebviewMessage({ type: "getConstructorModels" } as WebviewMessage)
 			}

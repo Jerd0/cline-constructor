@@ -67,7 +67,7 @@ const WelcomeView = memo(() => {
 				<div className="mt-4.5">
 					{showApiOptions && (
 						<div>
-							<ApiOptions showModelOptions={false} />
+							<ApiOptions showModelOptions={false} saveImmediately={false} />
 							<VSCodeButton onClick={handleSubmit} disabled={disableLetsGoButton} className="mt-0.75">
 								Let's go!
 							</VSCodeButton>

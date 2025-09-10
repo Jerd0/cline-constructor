@@ -149,6 +149,11 @@ const ApiOptions = ({
 	// Use full context state for immediate save payload
 	const extensionState = useExtensionState()
 	const { apiConfiguration, setApiConfiguration, uriScheme } = extensionState
+
+	// Check if Research.Cline is licensed - use useMemo to ensure it updates when licensedFeatures changes
+	const hasResearchClineLicense = useMemo(() => {
+		return extensionState.licensedFeatures?.includes("Research.Cline") ?? false
+	}, [extensionState.licensedFeatures])
 	const [ollamaModels, setOllamaModels] = useState<string[]>([])
 	const [lmStudioModels, setLmStudioModels] = useState<string[]>([])
 	const [vsCodeLmModels, setVsCodeLmModels] = useState<vscodemodels.LanguageModelChatSelector[]>([])
@@ -162,10 +167,12 @@ const ApiOptions = ({
 	const [reasoningEffortSelected, setReasoningEffortSelected] = useState(!!apiConfiguration?.reasoningEffort)
 
 	// Get constructor models from global state
-	const { 
-		constructorModels, 
-		isLoadingConstructorModels, 
-		setIsLoadingConstructorModels 
+	const {
+		constructorModels,
+		isLoadingConstructorModels,
+		setIsLoadingConstructorModels,
+		constructorModelsError,
+		setConstructorModelsError,
 	} = useExtensionState()
 
 	// Function to load Constructor models
@@ -175,24 +182,34 @@ const ApiOptions = ({
 			return // Models already loaded, don't load again
 		}
 
+		// If there's already an error, don't set loading state
+		if (constructorModelsError) {
+			return // Don't load if there's a cached error
+		}
+
 		setIsLoadingConstructorModels(true)
 		// Request Constructor models from the extension
 		vscode.postMessage({
 			type: "getConstructorModels",
 		})
-	}, [constructorModels, setIsLoadingConstructorModels])
+	}, [constructorModels, constructorModelsError, setIsLoadingConstructorModels])
 
 	const { selectedProvider, selectedModelId, selectedModelInfo } = useMemo(() => {
-		const normalized = normalizeApiConfiguration(apiConfiguration)
+		const normalized = normalizeApiConfiguration(apiConfiguration, hasResearchClineLicense)
 
 		// For constructory provider, only restore previously selected model, don't auto-select
 		return normalized
-	}, [apiConfiguration])
+	}, [apiConfiguration, hasResearchClineLicense])
 
 	// Load Constructor models when provider is constructory
 	useEffect(() => {
 		if (selectedProvider === "constructory") {
 			loadConstructorModels()
+		} else {
+			// Clear any previous error for future load
+			if (constructorModelsError) {
+				setConstructorModelsError(null)
+			}
 		}
 	}, [loadConstructorModels, selectedProvider])
 
@@ -225,35 +242,59 @@ const ApiOptions = ({
 	const handleInputChange = (field: keyof ApiConfiguration) => (event: any) => {
 		const newValue = event.target.value
 
-		// Update local state
+		// Update local state (always allow UI state update to show feedback)
 		setApiConfiguration({
 			...apiConfiguration,
 			[field]: newValue,
 		})
 
-		// If the field is the provider AND saveImmediately is true, save it immediately using the full context state
-		if (saveImmediately && field === "apiProvider") {
-			// Use apiConfiguration from the full extensionState context to send the most complete data
-			const currentFullApiConfig = extensionState.apiConfiguration
-			vscode.postMessage({
-				type: "apiConfiguration",
-				apiConfiguration: {
-					...currentFullApiConfig, // Send the most complete config available
-					apiProvider: newValue, // Override with the new provider
-				},
-			})
-		}
+		// Prevent saving for constructory without license or model
+		if (saveImmediately) {
+			// Determine the final provider after this change
+			const finalProvider = field === "apiProvider" ? newValue : selectedProvider
 
-		// For constructory provider, also save model selection immediately to ensure it's persisted
-		if (saveImmediately && field === "openAiModelId" && selectedProvider === "constructory") {
-			const currentFullApiConfig = extensionState.apiConfiguration
-			vscode.postMessage({
-				type: "apiConfiguration",
-				apiConfiguration: {
-					...currentFullApiConfig,
-					openAiModelId: newValue,
-				},
-			})
+			// For constructory provider, prevent saving if no license
+			if (finalProvider === "constructory") {
+				if (!hasResearchClineLicense) {
+					// Don't save anything for constructory without license
+					return
+				}
+
+				// Check if we have a model selected
+				const currentModelId =
+					field === "constructorModelId"
+						? newValue
+						: extensionState.apiConfiguration?.constructorModelId || selectedModelId
+
+				if (!currentModelId || currentModelId.trim() === "") {
+					// Don't save anything for constructory without a model
+					return
+				}
+
+				// If we have license and model, save the complete configuration
+				const currentFullApiConfig = extensionState.apiConfiguration
+				vscode.postMessage({
+					type: "apiConfiguration",
+					apiConfiguration: {
+						...currentFullApiConfig,
+						apiProvider: finalProvider,
+						constructorModelId: currentModelId,
+					},
+				})
+				return
+			}
+
+			// For non-constructory providers, save immediately as before
+			if (field === "apiProvider") {
+				const currentFullApiConfig = extensionState.apiConfiguration
+				vscode.postMessage({
+					type: "apiConfiguration",
+					apiConfiguration: {
+						...currentFullApiConfig,
+						apiProvider: newValue,
+					},
+				})
+			}
 		}
 	}
 
@@ -324,7 +365,7 @@ const ApiOptions = ({
 				value={selectedModelId}
 				onChange={handleInputChange("apiModelId")}
 				style={{ width: "100%" }}>
-				<VSCodeOption value="">Select a model...</VSCodeOption>
+				{!selectedModelId && <VSCodeOption value="">Select a model...</VSCodeOption>}
 				{Object.keys(models).map((modelId) => (
 					<VSCodeOption
 						key={modelId}
@@ -910,7 +951,9 @@ const ApiOptions = ({
 								})
 							}}
 							style={{ width: "100%" }}>
-							<VSCodeOption value="">Select a model...</VSCodeOption>
+							{!selectedModelId && !apiConfiguration?.awsBedrockCustomSelected && (
+								<VSCodeOption value="">Select a model...</VSCodeOption>
+							)}
 							{Object.keys(bedrockModels).map((modelId) => (
 								<VSCodeOption
 									key={modelId}
@@ -956,7 +999,9 @@ const ApiOptions = ({
 									value={apiConfiguration?.awsBedrockCustomModelBaseId || bedrockDefaultModelId}
 									onChange={handleInputChange("awsBedrockCustomModelBaseId")}
 									style={{ width: "100%" }}>
-									<VSCodeOption value="">Select a model...</VSCodeOption>
+									{!(apiConfiguration?.awsBedrockCustomModelBaseId || bedrockDefaultModelId) && (
+										<VSCodeOption value="">Select a model...</VSCodeOption>
+									)}
 									{Object.keys(bedrockModels).map((modelId) => (
 										<VSCodeOption
 											key={modelId}
@@ -1450,14 +1495,30 @@ const ApiOptions = ({
 
 			{selectedProvider === "constructory" && (
 				<div>
-					<p
-						style={{
-							fontSize: "12px",
-							marginTop: 3,
-							color: "var(--vscode-descriptionForeground)",
-						}}>
-						Constructory uses environment variables for configuration. No additional setup required.
-					</p>
+					{hasResearchClineLicense ? (
+						<p
+							style={{
+								fontSize: "12px",
+								marginTop: 3,
+								color: "var(--vscode-descriptionForeground)",
+							}}>
+							Constructory uses environment variables for configuration. No additional setup required.
+						</p>
+					) : (
+						<p
+							style={{
+								fontSize: "12px",
+								marginTop: 3,
+								color: "var(--vscode-errorForeground)",
+								padding: "8px 12px",
+								backgroundColor: "var(--vscode-inputValidation-errorBackground)",
+								border: "1px solid var(--vscode-inputValidation-errorBorder)",
+								borderRadius: "3px",
+							}}>
+							<strong>Research.Cline license required:</strong> The project owner needs to purchase a Research.Cline
+							license to use Constructory. Please contact your project administrator.
+						</p>
+					)}
 				</div>
 			)}
 
@@ -1624,7 +1685,9 @@ const ApiOptions = ({
 									})
 								}}
 								style={{ width: "100%" }}>
-								<VSCodeOption value="">Select a model...</VSCodeOption>
+								{!apiConfiguration?.vsCodeLmModelSelector && (
+									<VSCodeOption value="">Select a model...</VSCodeOption>
+								)}
 								{vsCodeLmModels.map((model) => (
 									<VSCodeOption
 										key={`${model.vendor}/${model.family}`}
@@ -2225,27 +2288,41 @@ const ApiOptions = ({
 				</>
 			)}
 
-			{selectedProvider === "constructory" && (
+			{selectedProvider === "constructory" && hasResearchClineLicense && (
 				<>
 					<DropdownContainer zIndex={DROPDOWN_Z_INDEX - 2} className="dropdown-container">
 						<label htmlFor="model-id">
 							<span style={{ fontWeight: 500 }}>Model</span>
 						</label>
-						{isLoadingConstructorModels ? (
-							<div style={{ 
-								padding: "8px 12px", 
-								color: "var(--vscode-descriptionForeground)",
-								fontSize: "13px"
-							}}>
+						{isLoadingConstructorModels && !constructorModelsError ? (
+							<div
+								style={{
+									padding: "8px 12px",
+									color: "var(--vscode-descriptionForeground)",
+									fontSize: "13px",
+								}}>
 								Loading models...
+							</div>
+						) : constructorModelsError ? (
+							<div
+								style={{
+									padding: "8px 12px",
+									color: constructorModelsError.includes("licence")
+										? "var(--vscode-errorForeground)"
+										: "var(--vscode-descriptionForeground)",
+									fontSize: "13px",
+								}}>
+								{constructorModelsError.includes("licence")
+									? "Research.Cline license is required to use Constructory."
+									: constructorModelsError}
 							</div>
 						) : (
 							<VSCodeDropdown
 								id="model-id"
 								value={selectedModelId}
-								onChange={handleInputChange("openAiModelId")}
+								onChange={handleInputChange("constructorModelId")}
 								style={{ width: "100%" }}>
-								<VSCodeOption value="">Select a model...</VSCodeOption>
+								{!selectedModelId && <VSCodeOption value="">Select a model...</VSCodeOption>}
 								{Object.keys(constructorModels).map((modelId) => (
 									<VSCodeOption
 										key={modelId}
@@ -2616,13 +2693,25 @@ const ModelInfoSupportsItem = ({
 	</span>
 )
 
-export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration): {
+export function normalizeApiConfiguration(
+	apiConfiguration?: ApiConfiguration,
+	hasResearchClineLicense?: boolean,
+): {
 	selectedProvider: ApiProvider
 	selectedModelId: string
 	selectedModelInfo: ModelInfo
 } {
-	const provider = apiConfiguration?.apiProvider || "anthropic"
-	const modelId = apiConfiguration?.apiModelId
+	// eslint-disable-next-line no-constant-condition
+	const defaultProvider: ApiProvider =
+		hasResearchClineLicense && process.env.ROLOS_SDK_TOKEN && process.env.ROLOS_API_SERVER ? "constructory" : "anthropic"
+	
+	// Reset constructory selection if no license AND model is specified
+	let provider = apiConfiguration?.apiProvider || defaultProvider
+	if (provider === "constructory" && !hasResearchClineLicense && apiConfiguration?.constructorModelId) {
+		provider = "anthropic" // Reset to default provider only when model is specified
+	}
+
+	const modelId = provider === "constructory" ? apiConfiguration?.constructorModelId : apiConfiguration?.apiModelId
 
 	const getProviderData = (models: Record<string, ModelInfo>, defaultId: string) => {
 		let selectedModelId: string
@@ -2699,7 +2788,7 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration): 
 		case "constructory":
 			return {
 				selectedProvider: provider,
-				selectedModelId: apiConfiguration?.openAiModelId || "",
+				selectedModelId: apiConfiguration?.constructorModelId || "",
 				selectedModelInfo: apiConfiguration?.openAiModelInfo || openAiModelInfoSaneDefaults,
 			}
 		case "ollama":
@@ -2742,6 +2831,20 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration): 
 		default:
 			return getProviderData(anthropicModels, anthropicDefaultModelId)
 	}
+}
+
+/**
+ * Custom hook that encapsulates license checking and API configuration normalization
+ * @param apiConfiguration The API configuration to normalize
+ * @returns Normalized API configuration with license-aware provider selection
+ */
+export const useNormalizedApiConfiguration = (apiConfiguration?: ApiConfiguration) => {
+	const { licensedFeatures } = useExtensionState()
+	const hasResearchClineLicense = licensedFeatures?.includes("Research.Cline") ?? false
+
+	return useMemo(() => {
+		return normalizeApiConfiguration(apiConfiguration, hasResearchClineLicense)
+	}, [apiConfiguration, hasResearchClineLicense])
 }
 
 export default memo(ApiOptions)

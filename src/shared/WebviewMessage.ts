@@ -29,8 +29,10 @@ export interface WebviewMessage {
 		| "executeQuickWin"
 		| "getVSCodeConfig"
 		| "getConstructorModels"
+		| "getLicensedFeatures"
 		| "showInformationMessage"
 		| "showErrorMessage"
+		| "updateLicensedFeatures"
 
 	text?: string
 	disabled?: boolean
@@ -84,6 +86,7 @@ export interface WebviewMessage {
 
 	offset?: number
 	shellIntegrationTimeout?: number
+	licensedFeatures?: string[]
 }
 
 export type ClineAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse"

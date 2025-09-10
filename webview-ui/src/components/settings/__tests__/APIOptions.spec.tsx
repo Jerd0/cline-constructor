@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react"
 import { describe, it, expect, vi } from "vitest"
-import ApiOptions from "../ApiOptions"
+import ApiOptions, { normalizeApiConfiguration } from "../ApiOptions"
 import { ExtensionStateContextProvider, useExtensionState } from "@/context/ExtensionStateContext"
 import { ApiConfiguration } from "@shared/api"
 
@@ -21,6 +21,8 @@ vi.mock("../../../context/ExtensionStateContext", async (importOriginal) => {
 			constructorModels: {},
 			isLoadingConstructorModels: false,
 			setIsLoadingConstructorModels: vi.fn(),
+			constructorModelsError: null,
+			setConstructorModelsError: vi.fn(),
 		})),
 	}
 })
@@ -34,6 +36,8 @@ const mockExtensionState = (apiConfiguration: Partial<ApiConfiguration>) => {
 		constructorModels: {},
 		isLoadingConstructorModels: false,
 		setIsLoadingConstructorModels: vi.fn(),
+		constructorModelsError: null,
+		setConstructorModelsError: vi.fn(),
 	} as any)
 }
 
@@ -100,6 +104,94 @@ describe("ApiOptions Component", () => {
 		)
 		const modelIdInput = screen.getByPlaceholderText("Enter Model ID...")
 		expect(modelIdInput).toBeInTheDocument()
+	})
+})
+
+describe("ApiOptions Component - Constructor Models Error Handling", () => {
+	vi.clearAllMocks()
+	const mockPostMessage = vi.fn()
+
+	beforeEach(() => {
+		//@ts-expect-error - vscode is not defined in the global namespace in test environment
+		global.vscode = { postMessage: mockPostMessage }
+	})
+
+	it("shows licence error message instead of loading for constructor provider", () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			apiConfiguration: {
+				apiProvider: "constructory",
+			},
+			setApiConfiguration: vi.fn(),
+			uriScheme: "vscode",
+			requestyModels: {},
+			constructorModels: {},
+			isLoadingConstructorModels: false,
+			setIsLoadingConstructorModels: vi.fn(),
+			constructorModelsError: "Project owner don't have licence Research.Cline",
+			setConstructorModelsError: vi.fn(),
+		} as any)
+
+		render(
+			<ExtensionStateContextProvider>
+				<ApiOptions showModelOptions={true} />
+			</ExtensionStateContextProvider>,
+		)
+
+		expect(screen.getByText("You should have Research.Cline licence")).toBeInTheDocument()
+		expect(screen.queryByText("Loading models...")).not.toBeInTheDocument()
+	})
+
+	it("shows loading message when loading and no error for constructor provider", () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			apiConfiguration: {
+				apiProvider: "constructory",
+			},
+			setApiConfiguration: vi.fn(),
+			uriScheme: "vscode",
+			requestyModels: {},
+			constructorModels: {},
+			isLoadingConstructorModels: true,
+			setIsLoadingConstructorModels: vi.fn(),
+			constructorModelsError: null,
+			setConstructorModelsError: vi.fn(),
+			licensedFeatures: ["Research.Cline"],
+			isLoadingLicensedFeatures: false,
+		} as any)
+
+		render(
+			<ExtensionStateContextProvider>
+				<ApiOptions showModelOptions={true} />
+			</ExtensionStateContextProvider>,
+		)
+
+		expect(screen.getByText("Loading models...")).toBeInTheDocument()
+		expect(screen.queryByText("You should have Research.Cline licence")).not.toBeInTheDocument()
+	})
+
+	it("shows generic error message for non-licence errors", () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			apiConfiguration: {
+				apiProvider: "constructory",
+			},
+			setApiConfiguration: vi.fn(),
+			uriScheme: "vscode",
+			requestyModels: {},
+			constructorModels: {},
+			isLoadingConstructorModels: false,
+			setIsLoadingConstructorModels: vi.fn(),
+			constructorModelsError: "API Error: Network timeout",
+			setConstructorModelsError: vi.fn(),
+		} as any)
+
+		render(
+			<ExtensionStateContextProvider>
+				<ApiOptions showModelOptions={true} />
+			</ExtensionStateContextProvider>,
+		)
+
+		expect(screen.getByText("API Error: Network timeout")).toBeInTheDocument()
+		expect(screen.queryByText("You should have Research.Cline licence")).not.toBeInTheDocument()
+		expect(screen.queryByText("Loading models...")).not.toBeInTheDocument()
 	})
 })
 
@@ -252,7 +344,7 @@ describe("ApiOptions Component - Constructory Provider", () => {
 		global.vscode = { postMessage: mockPostMessage }
 		mockExtensionState({
 			apiProvider: "constructory",
-			openAiModelId: "existing-model-id",
+			constructorModelId: "existing-model-id",
 		})
 	})
 
@@ -294,5 +386,36 @@ describe("ApiOptions Component - Constructory Provider", () => {
 
 		// The selected model should remain unchanged
 		expect(modelSelect).toHaveValue("existing-model-id")
+	})
+
+	it("auto-selects constructory as default provider when license is available", () => {
+		// Test with no API configuration - should default to constructory when licensed
+		const result = normalizeApiConfiguration(undefined, true)
+		expect(result.selectedProvider).toBe("constructory")
+	})
+
+	it("respects explicitly configured provider over auto-selection", () => {
+		// Test with explicit anthropic provider - should use configured provider
+		const result = normalizeApiConfiguration({ apiProvider: "anthropic" }, true)
+		expect(result.selectedProvider).toBe("anthropic")
+	})
+
+	it("auto-selects constructory when no provider specified in config", () => {
+		// Test with config but no provider - should default to constructory when licensed
+		const result = normalizeApiConfiguration({ apiModelId: "some-model" }, true)
+		expect(result.selectedProvider).toBe("constructory")
+	})
+
+	it("preserves constructory selection when explicitly chosen without license", () => {
+		// Test that constructory selection is preserved even without license
+		// This allows users to see the license error message in the UI
+		const result = normalizeApiConfiguration({ apiProvider: "constructory" }, false)
+		expect(result.selectedProvider).toBe("constructory")
+	})
+
+	it("defaults to anthropic when no provider specified and no license", () => {
+		// Test that default provider is anthropic when no license is available
+		const result = normalizeApiConfiguration(undefined, false)
+		expect(result.selectedProvider).toBe("anthropic")
 	})
 })

@@ -10,6 +10,7 @@ import McpView from "./components/mcp/configuration/McpConfigurationView"
 import { Providers } from "./Providers"
 import { Boolean, EmptyRequest } from "@shared/proto/common"
 import { WebviewProviderType } from "@shared/webview/types"
+import { vscode } from "./utils/vscode"
 
 const AppContent = () => {
 	const {
@@ -30,6 +31,8 @@ const AppContent = () => {
 		hideHistory,
 		hideAccount,
 		hideAnnouncement,
+		isLoadingLicensedFeatures,
+		loadLicensedFeatures,
 	} = useExtensionState()
 
 	useEffect(() => {
@@ -47,13 +50,32 @@ const AppContent = () => {
 		}
 	}, [shouldShowAnnouncement])
 
+	// Load licensed features once after state hydration
+	useEffect(() => {
+		if (didHydrateState) {
+			loadLicensedFeatures()
+		}
+	}, [didHydrateState, loadLicensedFeatures])
+
 	useEffect(() => {
 		const providerType = window.WEBVIEW_PROVIDER_TYPE || WebviewProviderType.TAB
 		console.log("[DEBUG] webviewProviderType", providerType)
 	}, [])
 
-	if (!didHydrateState) {
-		return null
+	if (!didHydrateState || isLoadingLicensedFeatures) {
+		return (
+			<div
+				style={{
+					display: "flex",
+					justifyContent: "center",
+					alignItems: "center",
+					height: "100vh",
+					flexDirection: "column",
+					gap: "16px",
+				}}>
+				<div>Loading...</div>
+			</div>
+		)
 	}
 
 	return (

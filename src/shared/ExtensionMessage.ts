@@ -39,6 +39,7 @@ export interface ExtensionMessage {
 		| "grpc_response" // New type for gRPC responses
 		| "vsCodeConfig" // New type for VSCode configuration
 		| "constructorModels" // New type for Constructor models
+		| "updateLicensedFeatures" // New type for updating licensed features
 	text?: string
 	action?:
 		| "chatButtonClicked"
@@ -105,6 +106,7 @@ export interface ExtensionMessage {
 		error?: string
 	}
 	constructorModels?: Record<string, ModelInfo>
+	licensedFeatures?: string[]
 }
 
 export type Platform = "aix" | "darwin" | "freebsd" | "linux" | "openbsd" | "sunos" | "win32" | "unknown"
@@ -144,6 +146,7 @@ export interface ExtensionState {
 	globalWorkflowToggles: ClineRulesToggles
 	localCursorRulesToggles: ClineRulesToggles
 	localWindsurfRulesToggles: ClineRulesToggles
+	licensedFeatures?: string[]
 }
 
 export interface ClineMessage {

@@ -10,7 +10,7 @@ import { useExtensionState } from "../../context/ExtensionStateContext"
 import { ModelsServiceClient } from "../../services/grpc-client"
 import { CODE_BLOCK_BG_COLOR } from "../common/CodeBlock"
 import { highlight } from "../history/HistoryView"
-import { ModelInfoView, normalizeApiConfiguration } from "./ApiOptions"
+import { ModelInfoView, useNormalizedApiConfiguration } from "./ApiOptions"
 import ThinkingBudgetSlider from "./ThinkingBudgetSlider"
 
 export interface RequestyModelPickerProps {
@@ -18,7 +18,7 @@ export interface RequestyModelPickerProps {
 }
 
 const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup }) => {
-	const { apiConfiguration, setApiConfiguration, requestyModels } = useExtensionState()
+	const { apiConfiguration, setApiConfiguration, requestyModels, licensedFeatures } = useExtensionState()
 	const [searchTerm, setSearchTerm] = useState(apiConfiguration?.requestyModelId || requestyDefaultModelId)
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false)
 	const [selectedIndex, setSelectedIndex] = useState(-1)
@@ -39,9 +39,7 @@ const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup }) =>
 		setSearchTerm(newModelId)
 	}
 
-	const { selectedModelId, selectedModelInfo } = useMemo(() => {
-		return normalizeApiConfiguration(apiConfiguration)
-	}, [apiConfiguration])
+	const { selectedModelId, selectedModelInfo } = useNormalizedApiConfiguration(apiConfiguration)
 
 	useMount(() => {
 		ModelsServiceClient.refreshRequestyModels(EmptyRequest.create({})).catch((err) => {

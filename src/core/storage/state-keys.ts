@@ -43,6 +43,7 @@ export type GlobalStateKey =
 	| "openAiModelId"
 	| "openAiModelInfo"
 	| "openAiHeaders"
+	| "constructorModelId"
 	| "ollamaModelId"
 	| "ollamaBaseUrl"
 	| "ollamaApiOptionsCtxNum"
@@ -93,5 +94,6 @@ export type GlobalStateKey =
 	| "shellIntegrationTimeout"
 	| "isNewUser"
 	| "constructorModels"
+	| "constructorModels403Error"
 
 export type LocalStateKey = "localClineRulesToggles"
