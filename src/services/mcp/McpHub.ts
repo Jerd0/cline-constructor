@@ -36,6 +36,30 @@ import { ExtensionMessage } from "@shared/ExtensionMessage"
 // Default timeout for internal MCP data requests in milliseconds; is not the same as the user facing timeout stored as DEFAULT_MCP_TIMEOUT_SECONDS
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000
 
+/**
+ * Substitutes environment variables in header values
+ * Supports ${ENV_VAR_NAME} syntax
+ */
+function substituteEnvironmentVariables(headers: Record<string, string> | undefined): Record<string, string> | undefined {
+	if (!headers) {
+		return undefined
+	}
+
+	const substituted: Record<string, string> = {}
+	for (const [key, value] of Object.entries(headers)) {
+		// Replace ${ENV_VAR} with actual environment variable value
+		substituted[key] = value.replace(/\$\{([^}]+)\}/g, (match, envVar) => {
+			const envValue = process.env[envVar]
+			if (envValue === undefined) {
+				console.warn(`Environment variable ${envVar} is not set, keeping original value: ${match}`)
+				return match
+			}
+			return envValue
+		})
+	}
+	return substituted
+}
+
 export type McpConnection = {
 	server: McpServer
 	client: Client
@@ -56,11 +80,15 @@ const BaseConfigSchema = z.object({
 
 const SseConfigSchema = BaseConfigSchema.extend({
 	url: z.string().url(),
-	headers: z.record(z.string()).optional(), // headers of POST requests to the sse server
-}).transform((config) => ({
-	...config,
-	transportType: "sse" as const,
-}))
+	headers: z.record(z.string()).optional(),
+})
+	.refine((config) => !("transportType" in config) || config.transportType !== "http", {
+		message: "SSE config cannot have transportType 'http'",
+	})
+	.transform((config) => ({
+		...config,
+		transportType: "sse" as const,
+	}))
 
 const StdioConfigSchema = BaseConfigSchema.extend({
 	command: z.string(),
@@ -74,12 +102,13 @@ const StdioConfigSchema = BaseConfigSchema.extend({
 const StreamableHTTPConfigSchema = BaseConfigSchema.extend({
 	transportType: z.literal("http"),
 	url: z.string().url(),
+	headers: z.record(z.string()).optional(),
 }).transform((config) => ({
 	...config,
 	transportType: "http" as const,
 }))
 
-const ServerConfigSchema = z.union([StdioConfigSchema, SseConfigSchema, StreamableHTTPConfigSchema])
+const ServerConfigSchema = z.union([StdioConfigSchema, StreamableHTTPConfigSchema, SseConfigSchema])
 
 const McpSettingsSchema = z.object({
 	mcpServers: z.record(ServerConfigSchema),
@@ -144,6 +173,7 @@ export class McpHub {
 			try {
 				config = JSON.parse(content)
 			} catch (error) {
+				console.error(`Failed to parse MCP settings JSON:`, error)
 				vscode.window.showErrorMessage(
 					"Invalid MCP settings format. Please ensure your settings follow the correct JSON format.",
 				)
@@ -153,6 +183,7 @@ export class McpHub {
 			// Validate against schema
 			const result = McpSettingsSchema.safeParse(config)
 			if (!result.success) {
+				console.error(`MCP settings schema validation failed:`, result.error)
 				vscode.window.showErrorMessage("Invalid MCP settings schema.")
 				return undefined
 			}
@@ -213,9 +244,20 @@ export class McpHub {
 			let transport: StdioClientTransport | SSEClientTransport | StreamableHTTPClientTransport
 
 			if (config.transportType === "sse") {
-				transport = new SSEClientTransport(new URL(config.url), {})
+				// Set headers of POST requests to the sse server
+				const postRequestInit = {
+					headers: substituteEnvironmentVariables(config.headers),
+				}
+
+				transport = new SSEClientTransport(new URL(config.url), {
+					requestInit: postRequestInit,
+				})
 			} else if (config.transportType === "http") {
-				transport = new StreamableHTTPClientTransport(new URL(config.url), {})
+				transport = new StreamableHTTPClientTransport(new URL(config.url), {
+					requestInit: {
+						headers: substituteEnvironmentVariables(config.headers),
+					},
+				})
 			} else {
 				transport = new StdioClientTransport({
 					command: config.command,
@@ -331,14 +373,18 @@ export class McpHub {
 			if (config.transportType === "sse") {
 				// Set headers of POST requests to the sse server
 				const postRequestInit = {
-					headers: config.headers,
+					headers: substituteEnvironmentVariables(config.headers),
 				}
 
 				transport = new SSEClientTransport(new URL(config.url), {
 					requestInit: postRequestInit,
 				})
 			} else if (config.transportType === "http") {
-				transport = new StreamableHTTPClientTransport(new URL(config.url), {})
+				transport = new StreamableHTTPClientTransport(new URL(config.url), {
+					requestInit: {
+						headers: substituteEnvironmentVariables(config.headers),
+					},
+				})
 			} else {
 				transport = new StdioClientTransport({
 					command: config.command,

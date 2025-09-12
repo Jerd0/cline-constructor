@@ -2704,7 +2704,7 @@ export function normalizeApiConfiguration(
 	// eslint-disable-next-line no-constant-condition
 	const defaultProvider: ApiProvider =
 		hasResearchClineLicense && process.env.ROLOS_SDK_TOKEN && process.env.ROLOS_API_SERVER ? "constructory" : "anthropic"
-	
+
 	// Reset constructory selection if no license AND model is specified
 	let provider = apiConfiguration?.apiProvider || defaultProvider
 	if (provider === "constructory" && !hasResearchClineLicense && apiConfiguration?.constructorModelId) {

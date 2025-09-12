@@ -14,14 +14,14 @@ export class ConstructoryHandler implements ApiHandler {
 
 	constructor(options: ApiHandlerOptions) {
 		this.options = options
-		const baseURL = process.env.ROLOS_API_SERVER
+		const baseURL = process.env.RESEARCH_API_SERVER
 		const fullBaseURL = `${baseURL}/api/platform-kmapi/v1/directllm`
 
 		this.client = new OpenAI({
 			baseURL: fullBaseURL,
 			apiKey: "noop",
 			defaultHeaders: {
-				"X-CTR-Session-Token": `${process.env.ROLOS_SDK_TOKEN}`,
+				"X-CTR-Session-Token": `${process.env.RESEARCH_SDK_TOKEN}`,
 			},
 		})
 	}

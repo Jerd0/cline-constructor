@@ -307,8 +307,8 @@ export class Controller {
 			case "getVSCodeConfig": {
 				try {
 					const vsCodeConfig = {
-						constructorOrigin: process.env.ROLOS_API_SERVER,
-						constructorSessionToken: process.env.ROLOS_SDK_TOKEN,
+						constructorOrigin: process.env.RESEARCH_API_SERVER,
+						constructorSessionToken: process.env.RESEARCH_SDK_TOKEN,
 					}
 
 					this.postMessageToWebview({
@@ -328,8 +328,8 @@ export class Controller {
 					// License check is now handled in the frontend via context
 					// The frontend will only show constructory if licensed
 					// But we can add a server-side check as backup
-					const baseURL = process.env.ROLOS_API_SERVER
-					const sessionToken = process.env.ROLOS_SDK_TOKEN
+					const baseURL = process.env.RESEARCH_API_SERVER
+					const sessionToken = process.env.RESEARCH_SDK_TOKEN
 					if (!baseURL || !sessionToken) {
 						this.postMessageToWebview({
 							type: "constructorModels",
@@ -359,11 +359,11 @@ export class Controller {
 						return
 					}
 
-					const constructorOrigin = process.env.ROLOS_API_SERVER
-					const constructorSessionToken = process.env.ROLOS_SDK_TOKEN
+					const constructorOrigin = process.env.RESEARCH_API_SERVER
+					const constructorSessionToken = process.env.RESEARCH_SDK_TOKEN
 
 					if (!constructorOrigin || !constructorSessionToken) {
-						const errorMsg = `Missing environment variables: ROLOS_API_SERVER=${!!constructorOrigin}, ROLOS_SDK_TOKEN=${!!constructorSessionToken}`
+						const errorMsg = `Missing environment variables: RESEARCH_API_SERVER=${!!constructorOrigin}, RESEARCH_SDK_TOKEN=${!!constructorSessionToken}`
 						this.postMessageToWebview({
 							type: "constructorModels",
 							error: errorMsg,
@@ -433,8 +433,8 @@ export class Controller {
 			}
 			case "getLicensedFeatures": {
 				try {
-					const baseURL = process.env.ROLOS_API_SERVER
-					const sessionToken = process.env.ROLOS_SDK_TOKEN
+					const baseURL = process.env.RESEARCH_API_SERVER
+					const sessionToken = process.env.RESEARCH_SDK_TOKEN
 
 					if (!baseURL || !sessionToken) {
 						this.postMessageToWebview({

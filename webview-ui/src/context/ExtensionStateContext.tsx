@@ -297,15 +297,15 @@ export const ExtensionStateContextProvider: React.FC<{
 				setIsLoadingLicensedFeatures(false)
 				// Mark as loaded to prevent future loads
 				setHasLoadedLicensedFeatures(true)
-				
+
 				// Store licensed features in extension state
 				const licensedFeatures = message.licensedFeatures || []
-				
+
 				setState((prevState) => ({
 					...prevState,
 					licensedFeatures: licensedFeatures,
 				}))
-				
+
 				// Show information message about loaded licenses count in webview
 				vscode.postMessage({
 					type: "showInformationMessage",
@@ -425,7 +425,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		if (hasLoadedLicensedFeatures) {
 			return // Features already loaded, don't load again
 		}
-		
+
 		// Set loading state to true when starting the request
 		setIsLoadingLicensedFeatures(true)
 		// Request licensed features from backend instead of direct API call

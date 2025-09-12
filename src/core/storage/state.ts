@@ -267,7 +267,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		apiProvider = storedApiProvider
 	} else {
 		// Check for constructory environment variables first (with test defaults)
-		const hasConstructorEnvVars = process.env.ROLOS_SDK_TOKEN && process.env.ROLOS_API_SERVER
+		const hasConstructorEnvVars = process.env.RESEARCH_SDK_TOKEN && process.env.RESEARCH_API_SERVER
 
 		// Don't select constructory if we've previously had a 403 error
 		if (hasConstructorEnvVars && !constructorModels403Error) {
